@@ -5,7 +5,10 @@
   {description, "Custom error handler"},
   {vsn, "0.1.0"},
   {modules, [
-             riak_err_app
+             riak_err_app,
+             riak_err_handler,
+             riak_err_monitor,
+             riak_err_sup
             ]},
   {applications, [
                   kernel,

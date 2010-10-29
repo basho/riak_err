@@ -14,20 +14,32 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
--module(riak_err_app).
+-module(riak_err_sup).
 
--behaviour(application).
+-behaviour(supervisor).
 
-%% Application callbacks
--export([start/0,
-         start/2,
-         stop/1]).
+%% API
+-export([start_link/0]).
 
-start() ->
-    application:start(riak_err).
+%% Supervisor callbacks
+-export([init/1]).
 
-start(_StartType, _StartArgs) ->
-    riak_err_sup:start_link().
+-define(SERVER, ?MODULE).
 
-stop(_State) ->
-    ok.
+start_link() ->
+    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
+
+init([]) ->
+    RestartStrategy = one_for_one,
+    MaxRestarts = 1000,
+    MaxSecondsBetweenRestarts = 3600,
+
+    SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
+
+    Restart = permanent,
+    Shutdown = 5000,
+
+    Monitor = {riak_err_monitor, {riak_err_monitor, start_link, []},
+                Restart, Shutdown, worker, [riak_err_monitor]},
+
+    {ok, {SupFlags, [Monitor]}}.

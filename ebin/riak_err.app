@@ -8,7 +8,8 @@
              riak_err_app,
              riak_err_handler,
              riak_err_monitor,
-             riak_err_sup
+             riak_err_sup,
+             trunc_io
             ]},
   {applications, [
                   kernel,

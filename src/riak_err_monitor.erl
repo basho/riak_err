@@ -28,7 +28,9 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
          code_change/3]).
 
--record(state, {}).
+-record(state, {
+          max_len = 4000
+         }).
 
 %%%----------------------------------------------------------------------
 %%% API
@@ -86,11 +88,13 @@ handle_cast({gen_event_EXIT, Handler, Reason}, State) ->
     %% Our handler ought to be bullet-proof ... but it wasn't, bummer.
     %% We will stop now, and our supervisor will restart us and thus
     %% reinstate the custom event handler.
-    io:format("~w: ~s: handler ~w exited for reason ~W\n",
-              [self(), ?MODULE, Handler, Reason, 20]),
+    {Str, _} = trunc_io:print(Reason, State#state.max_len),
+    io:format("~w: ~s: handler ~w exited for reason ~s\n",
+              [self(), ?MODULE, Handler, Str]),
     {stop, gen_event_EXIT, State};
 handle_cast(Msg, State) ->
-    io:format("~w: ~s:handle_cast got ~w\n", [self(), ?MODULE, Msg]),
+    {Str, _} = trunc_io:print(Msg, State#state.max_len),
+    io:format("~w: ~s:handle_cast got ~s\n", [self(), ?MODULE, Str]),
     {noreply, State}.
 
 %%----------------------------------------------------------------------
@@ -100,7 +104,8 @@ handle_cast(Msg, State) ->
 %%          {stop, Reason, State}            (terminate/2 is called)
 %%----------------------------------------------------------------------
 handle_info(Info, State) ->
-    io:format("~w: ~s:handle_info got ~w\n", [self(), ?MODULE, Info]),
+    {Str, _} = trunc_io:print(Info, State#state.max_len),
+    io:format("~w: ~s:handle_info got ~w\n", [self(), ?MODULE, Str]),
     {noreply, State}.
 
 %%----------------------------------------------------------------------

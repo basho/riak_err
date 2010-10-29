@@ -30,7 +30,9 @@
 -export([init/1, handle_event/2, handle_call/2, handle_info/2, terminate/2,
          code_change/3]).
 
--record(state, {}).
+-record(state, {
+          max_len = 4000
+         }).
 
 %%%----------------------------------------------------------------------
 %%% API
@@ -60,7 +62,8 @@ init([]) ->
 %%          remove_handler                              
 %%----------------------------------------------------------------------
 handle_event(Event, State) ->
-    io:format("~s: event ~P\n", [?MODULE, Event, 10]),
+    Formatted = format_event(Event, State),
+    io:put_chars(Formatted),
     {ok, State}.
 
 %%----------------------------------------------------------------------
@@ -96,3 +99,71 @@ code_change(_OldVsn, State, _Extra) ->
 %%%----------------------------------------------------------------------
 %%% Internal functions
 %%%----------------------------------------------------------------------
+
+format_event(Event, #state{max_len = MaxLen}) ->
+    ReportStr = case Event of
+                    {error, _GL, _}                         -> "ERROR REPORT";
+                    %% SLF: non-standard string below.
+                    {emulator, _, _}                        -> "ERROR REPORT (emulator)";
+                    {error_report, _, {_, std_error, _}}    -> "ERROR REPORT";
+                    {info, _, _}                            -> "INFO REPORT";
+                    {info_report, _, {_, std_info, _}}      -> "INFO REPORT";
+                    {info_msg, _, _}                        -> "INFO REPORT";
+                    {warning_report, _, {_, std_warning, _}}-> "WARNING REPORT";
+                    {warning_msg, _, _}                     -> "WARNING REPORT";
+                    %% This type is ignored, so whatever.
+                    _                                       -> "ODD REPORT"
+                end,
+    Time = write_time(maybe_utc(erlang:localtime()), ReportStr),
+    {Str, _} = trunc_io:print(Event, MaxLen),
+    io_lib:format("~s: ~s: event str ~s\n", [Time, ?MODULE, Str]).
+
+%% From OTP stdlib's error_logger_tty_h.erl ... the !@#$! functions
+%% aren't exported.
+
+write_time({utc,{{Y,Mo,D},{H,Mi,S}}},Type) ->
+    io_lib:format("~n=~s==== ~p-~s-~p::~s:~s:~s UTC ===~n",
+                  [Type,D,month(Mo),Y,t(H),t(Mi),t(S)]);
+write_time({{Y,Mo,D},{H,Mi,S}},Type) ->
+    io_lib:format("~n=~s==== ~p-~s-~p::~s:~s:~s ===~n",
+                  [Type,D,month(Mo),Y,t(H),t(Mi),t(S)]).
+
+maybe_utc(Time) ->
+    UTC = case application:get_env(sasl, utc_log) of
+              {ok, Val} ->
+                  Val;
+              undefined ->
+                  %% Backwards compatible:
+                  case application:get_env(stdlib, utc_log) of
+                      {ok, Val} ->
+                          Val;
+                      undefined ->
+                          false
+                  end
+          end,
+    if
+        UTC =:= true ->
+            {utc, calendar:local_time_to_universal_time_dst(Time)};
+        true -> 
+            Time
+    end.
+
+t(X) when is_integer(X) ->
+    t1(integer_to_list(X));
+t(_) ->
+    "".
+t1([X]) -> [$0,X];
+t1(X)   -> X.
+
+month(1) -> "Jan";
+month(2) -> "Feb";
+month(3) -> "Mar";
+month(4) -> "Apr";
+month(5) -> "May";
+month(6) -> "Jun";
+month(7) -> "Jul";
+month(8) -> "Aug";
+month(9) -> "Sep";
+month(10) -> "Oct";
+month(11) -> "Nov";
+month(12) -> "Dec".

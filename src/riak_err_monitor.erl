@@ -56,13 +56,13 @@ init([]) ->
     %% Add our custom handler.
     ok = gen_event:add_sup_handler(error_logger, riak_err_handler, []),
 
-    %% Disable the kernel default logger.
-    error_logger:tty(false),
-    %% Disable the SASL default logger.
+    %% Disable the default error logger.
+    gen_event:delete_handler(error_logger, error_logger,
+                             {stop_please, ?MODULE}),
+    %% Disable the SASL default loggers.
     gen_event:delete_handler(error_logger, sasl_report_tty_h,
                              {stop_please, ?MODULE}),
-    %% Same for the default error logger.
-    gen_event:delete_handler(error_logger, error_logger,
+    gen_event:delete_handler(error_logger, sasl_report_file_h,
                              {stop_please, ?MODULE}),
     {ok, #state{}}.
 

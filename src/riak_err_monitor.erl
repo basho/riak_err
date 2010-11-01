@@ -84,14 +84,6 @@ handle_call(_Request, _From, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %%----------------------------------------------------------------------
-handle_cast({gen_event_EXIT, Handler, Reason}, State) ->
-    %% Our handler ought to be bullet-proof ... but it wasn't, bummer.
-    %% We will stop now, and our supervisor will restart us and thus
-    %% reinstate the custom event handler.
-    {Str, _} = trunc_io:print(Reason, State#state.max_len),
-    io:format("~w: ~s: handler ~w exited for reason ~s\n",
-              [self(), ?MODULE, Handler, Str]),
-    {stop, gen_event_EXIT, State};
 handle_cast(Msg, State) ->
     {Str, _} = trunc_io:print(Msg, State#state.max_len),
     io:format("~w: ~s:handle_cast got ~s\n", [self(), ?MODULE, Str]),
@@ -103,6 +95,14 @@ handle_cast(Msg, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %%----------------------------------------------------------------------
+handle_info({gen_event_EXIT, Handler, Reason}, State) ->
+    %% Our handler ought to be bullet-proof ... but it wasn't, bummer.
+    %% We will stop now, and our supervisor will restart us and thus
+    %% reinstate the custom event handler.
+    {Str, _} = trunc_io:print(Reason, State#state.max_len),
+    io:format("~w: ~s: handler ~w exited for reason ~s\n",
+              [self(), ?MODULE, Handler, Str]),
+    {stop, gen_event_EXIT, State};
 handle_info(Info, State) ->
     {Str, _} = trunc_io:print(Info, State#state.max_len),
     io:format("~w: ~s:handle_info got ~w\n", [self(), ?MODULE, Str]),

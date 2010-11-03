@@ -28,7 +28,6 @@
 %%   (Also in app.config: {errlog_type, error})
 %%   That means that I need to reimplement level filtering and formatting
 %%   and scribbling to a file??
-%% * Find TODO labels and fix them
 
 -module(riak_err_handler).
 
@@ -229,8 +228,6 @@ sasl_limited_str(supervisor_report, Report,
     Context = riak_err_stdlib:sup_get(errorContext, Report),
     Reason = riak_err_stdlib:sup_get(reason, Report),
     Offender = riak_err_stdlib:sup_get(offender, Report),
-    %% TODO: Offender includes start args, use ~P formatting instead of
-    %%       io_trunc?  {shrug}
     FmtString = "     Supervisor: ~p~n     Context:    ~p~n     Reason:     "
         "~s~n     Offender:   ~s~n~n",
     {ReasonStr, _} = trunc_io:print(Reason, FmtMaxBytes),

@@ -18,30 +18,69 @@
 %% can cause memory use problems when handling very large messages)
 %% with a handler that will use a limited amount of RAM but is
 %% otherwise equivalent.
+%%
+%% There are two config knobs may be specified on the command line
+%% via "-riak_err KnobName Integer" on the command line or (in a
+%% Basho application like Riak) via the same "-riak_err KnobName Integer"
+%% line in the <tt>etc/vm.args</tt> file):
+%% <ol>
+%% <li> <tt>term_max_size</tt> For arguments formatted in FormatString &amp;
+%% ArgList style, if the total size of ArgList is more than term_max_size,
+%% then we'll ignore FormatString and log the message with a well-known
+%% (and therefore safe) formatting string.  The default is 10KBytes. </li>
+%% <li> <tt>fmt_max_bytes</tt> When formatting a log-related term that might
+%% be "big", limit the term's formatted output to a maximum of
+%% <tt>fmt_max_bytes</tt> bytes.  The default is 12KBytes. </li>
+%% </ol>
+
+%% TODO:
+%%
+%% * The default Riak* stuff uses the
+%%   {sasl_error_logger, {file, File}} -> sasl_report_file_h handler.
+%%   (Also in app.config: {errlog_type, error})
+%%   That means that I need to reimplement level filtering and formatting
+%%   and scribbling to a file??
+%% * Find TODO labels and fix them
+%% * Double-check license compat:
+%%     * trunc_io:
+%%     * EPL stuff at bottom
 
 -module(riak_err_handler).
 
 -behaviour(gen_event).
 
 %% External exports
--export([start_link/0, add_handler/0]).
+-export([start_link/0, add_handler/0,
+         set_term_max_size/1, set_fmt_max_bytes/1,
+         get_state/0]).
 
 %% gen_event callbacks
 -export([init/1, handle_event/2, handle_call/2, handle_info/2, terminate/2,
          code_change/3]).
 
 -record(state, {
-          max_len = 4000
+          %% .
+          term_max_size = 10000,
+          fmt_max_bytes = 8000
          }).
 
 %%%----------------------------------------------------------------------
 %%% API
 %%%----------------------------------------------------------------------
 start_link() ->
-    gen_event:start_link({local, riak_err_handler}). 
+    gen_event:start_link({local, ?MODULE}). 
 
 add_handler() ->
-    gen_event:add_handler(riak_err_handler, riak_err_handler, []).
+    gen_event:add_handler(?MODULE, ?MODULE, []).
+
+set_term_max_size(Num) ->
+    gen_event:call(error_logger, ?MODULE, {set_term_max_size, Num}, infinity).
+
+set_fmt_max_bytes(Num) ->
+    gen_event:call(error_logger, ?MODULE, {set_fmt_max_bytes, Num}, infinity).
+
+get_state() ->
+    gen_event:call(error_logger, ?MODULE, {get_state}, infinity).
 
 %%%----------------------------------------------------------------------
 %%% Callback functions from gen_event
@@ -53,7 +92,10 @@ add_handler() ->
 %%          Other
 %%----------------------------------------------------------------------
 init([]) ->
-    {ok, #state{}}.
+    TermMaxSize = get_int_env(term_max_size, 10*1024),
+    FmtMaxBytes = get_int_env(fmt_max_bytes, 12*1024),
+    {ok, #state{term_max_size = TermMaxSize,
+                fmt_max_bytes = FmtMaxBytes}}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_event/2
@@ -72,8 +114,14 @@ handle_event(Event, State) ->
 %%          {swap_handler, Reply, Args1, State1, Mod2, Args2} |
 %%          {remove_handler, Reply}                            
 %%----------------------------------------------------------------------
+handle_call({set_term_max_size, Num}, State) ->
+    {ok, ok, State#state{term_max_size = Num}};
+handle_call({set_fmt_max_bytes, Num}, State) ->
+    {ok, ok, State#state{fmt_max_bytes = Num}};
+handle_call({get_state}, State) ->
+    {ok, State, State};
 handle_call(_Request, State) ->
-    Reply = ok,
+    Reply = nosupported,
     {ok, Reply, State}.
 
 %%----------------------------------------------------------------------
@@ -134,16 +182,23 @@ format_event(Event, S) ->
     if ReportStr == ignore ->
             ok;
        true ->
-            Time = write_time(maybe_utc(erlang:localtime()), ReportStr),
+            Time = riak_err_stdlib:write_time(riak_err_stdlib:maybe_utc(erlang:localtime()), ReportStr),
             NodeSuffix = other_node_suffix(Pid),
             io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix])
     end.
 
-limited_fmt(Fmt, Args, _S) ->
-    io_lib:format("FIXME: " ++ Fmt, Args).    
+limited_fmt(Fmt, Args, #state{fmt_max_bytes = FmtMaxBytes,
+                              term_max_size = TermMaxSize}) ->
+    TermSize = erts_debug:flat_size(Args),
+    if TermSize > TermMaxSize ->
+            {Str, _} = trunc_io:print(Args, FmtMaxBytes),
+            ["Oversize args for format \"", Fmt, "\": ", Str];
+       true ->
+            io_lib:format(Fmt, Args)
+    end.
 
 limited_str(Term, S) ->
-    {Str, _} = trunc_io:print(Term, S#state.max_len),
+    {Str, _} = trunc_io:print(Term, S#state.fmt_max_bytes),
     Str.
 
 other_node_suffix(Pid) when node(Pid) =/= node() ->
@@ -152,7 +207,7 @@ other_node_suffix(_) ->
     "".
 
 perhaps_a_sasl_report(error_report, {Pid, Type, Report}, S) ->
-    case is_my_error_report(Type) of
+    case riak_err_stdlib:is_my_error_report(Type) of
         true ->
             {sasl_type_to_report_head(Type), Pid,
              sasl_limited_str(Type, Report, S)};
@@ -160,7 +215,7 @@ perhaps_a_sasl_report(error_report, {Pid, Type, Report}, S) ->
             {ignore, ignore, ignore}
     end;
 perhaps_a_sasl_report(info_report, {Pid, Type, Report}, S) ->
-    case is_my_info_report(Type) of
+    case riak_err_stdlib:is_my_info_report(Type) of
         true ->
             {sasl_type_to_report_head(Type), Pid,
              sasl_limited_str(Type, Report, S)};
@@ -177,87 +232,41 @@ sasl_type_to_report_head(crash_report) ->
 sasl_type_to_report_head(progress) ->
     "PROGRESS REPORT".
 
-sasl_limited_str(supervisor_report, Report, _S) ->
-    Name = sup_get(supervisor, Report),
-    Context = sup_get(errorContext, Report),
-    Reason = sup_get(reason, Report),
-    Offender = sup_get(offender, Report),
+sasl_limited_str(supervisor_report, Report,
+                 #state{fmt_max_bytes = FmtMaxBytes}) ->
+    Name = riak_err_stdlib:sup_get(supervisor, Report),
+    Context = riak_err_stdlib:sup_get(errorContext, Report),
+    Reason = riak_err_stdlib:sup_get(reason, Report),
+    Offender = riak_err_stdlib:sup_get(offender, Report),
+    %% TODO: Offender includes start args, use ~P formatting instead of
+    %%       io_trunc?  {shrug}
     FmtString = "     Supervisor: ~p~n     Context:    ~p~n     Reason:     "
-        "~80.18p~n     Offender:   ~80.18p~n~n",
-    FmtString = "     Supervisor: ~p~n     Context:    ~p~n     Reason:     "
-        "~80.18p~n     Offender:   ~80.18p~n~n",
-    io_lib:format("FixMe: " ++ FmtString, [Name, Context, Reason, Offender]);
-sasl_limited_str(progress, Report, _S) ->
-    [io_lib:format("FixMe    ~16w: ~p~n",[Tag,Data]) || {Tag, Data} <- Report];
-sasl_limited_str(crash_repofg, Report, _S) ->
-    ["FixMe2: ", proc_lib:format(Report)].
+        "~s~n     Offender:   ~s~n~n",
+    {ReasonStr, _} = trunc_io:print(Reason, FmtMaxBytes),
+    {OffenderStr, _} = trunc_io:print(Offender, FmtMaxBytes),
+    io_lib:format(FmtString, [Name, Context, ReasonStr, OffenderStr]);
+sasl_limited_str(progress, Report, #state{fmt_max_bytes = FmtMaxBytes}) ->
+    [begin
+         {Str, _} = trunc_io:print(Data, FmtMaxBytes),
+         io_lib:format("    ~16w: ~s~n", [Tag, Str])
+     end || {Tag, Data} <- Report];
+sasl_limited_str(crash_report, Report, #state{fmt_max_bytes = FmtMaxBytes}) ->
+    riak_err_stdlib:proc_lib_format(Report, FmtMaxBytes).
 
-%% From OTP stdlib's error_logger_tty_h.erl ... the !@#$! functions
-%% aren't exported.
-
-write_time({utc,{{Y,Mo,D},{H,Mi,S}}},Type) ->
-    %% TODO PUT ME BACK: io_lib:format("~n=~s==== ~p-~s-~p::~s:~s:~s UTC ===~n",
-    io_lib:format("~n-~s-==- ~p-~s-~p::~s:~s:~s UTC -=-~n",
-                  [Type,D,month(Mo),Y,t(H),t(Mi),t(S)]);
-write_time({{Y,Mo,D},{H,Mi,S}},Type) ->
-    %% TODO PUT ME BACK: io_lib:format("~n=~s==== ~p-~s-~p::~s:~s:~s ===~n",
-    io_lib:format("~n-~s-==- ~p-~s-~p::~s:~s:~s -=-~n",
-                  [Type,D,month(Mo),Y,t(H),t(Mi),t(S)]).
-
-maybe_utc(Time) ->
-    UTC = case application:get_env(sasl, utc_log) of
-              {ok, Val} ->
-                  Val;
-              undefined ->
-                  %% Backwards compatible:
-                  case application:get_env(stdlib, utc_log) of
-                      {ok, Val} ->
-                          Val;
-                      undefined ->
-                          false
-                  end
-          end,
-    if
-        UTC =:= true ->
-            {utc, calendar:local_time_to_universal_time_dst(Time)};
-        true -> 
-            Time
+get_int_env(Name, Default) when is_atom(Name) ->
+    get_int_env(atom_to_list(Name), Default);
+get_int_env(Name, Default) ->
+    case init:get_argument(riak_err) of
+        {ok, ListOfLists} ->
+            find_int_in_pairs(lists:append(ListOfLists), Name, Default);
+        error ->
+            Default
     end.
 
-t(X) when is_integer(X) ->
-    t1(integer_to_list(X));
-t(_) ->
-    "".
-t1([X]) -> [$0,X];
-t1(X)   -> X.
+find_int_in_pairs([Key, Value|_], Key, _Default) ->
+    list_to_integer(Value);
+find_int_in_pairs([_K, _V|Tail], Key, Default) ->
+    find_int_in_pairs(Tail, Key, Default);
+find_int_in_pairs(_, _, Default) ->
+    Default.
 
-month(1) -> "Jan";
-month(2) -> "Feb";
-month(3) -> "Mar";
-month(4) -> "Apr";
-month(5) -> "May";
-month(6) -> "Jun";
-month(7) -> "Jul";
-month(8) -> "Aug";
-month(9) -> "Sep";
-month(10) -> "Oct";
-month(11) -> "Nov";
-month(12) -> "Dec".
-
-%% From OTP sasl's sasl_report.erl ... the !@#$! functions
-%% aren't exported.
-
-is_my_error_report(supervisor_report)   -> true;
-is_my_error_report(crash_report)        -> true;
-is_my_error_report(_)                   -> false.
-
-is_my_info_report(progress)  -> true;
-is_my_info_report(_)         -> false.
-
-sup_get(Tag, Report) ->
-    case lists:keysearch(Tag, 1, Report) of
-        {value, {_, Value}} ->
-            Value;
-        _ ->
-            ""
-    end.

@@ -29,7 +29,8 @@
          code_change/3]).
 
 -record(state, {
-          max_len = 4000
+          max_len = 20*1024,
+          glarf
          }).
 
 %%%----------------------------------------------------------------------
@@ -56,15 +57,11 @@ init([]) ->
     %% Add our custom handler.
     ok = gen_event:add_sup_handler(error_logger, riak_err_handler, []),
 
-    %% Disable the default error logger.
-    gen_event:delete_handler(error_logger, error_logger,
-                             {stop_please, ?MODULE}),
-    %% Disable the SASL default loggers.
-    gen_event:delete_handler(error_logger, sasl_report_tty_h,
-                             {stop_please, ?MODULE}),
-    gen_event:delete_handler(error_logger, sasl_report_file_h,
-                             {stop_please, ?MODULE}),
-    {ok, #state{}}.
+    %% Disable the default error logger handlers and SASL handlers.
+    [gen_event:delete_handler(error_logger, Handler, {stop_please, ?MODULE}) ||
+        Handler <- [error_logger, error_logger_tty_h, sasl_report_tty_h,
+                    sasl_report_file_h]],
+    {ok, #state{glarf = lists:duplicate(77666, $y)}}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_call/3
@@ -103,9 +100,13 @@ handle_info({gen_event_EXIT, Handler, Reason}, State) ->
     io:format("~w: ~s: handler ~w exited for reason ~s\n",
               [self(), ?MODULE, Handler, Str]),
     {stop, gen_event_EXIT, State};
+handle_info(foo, _State) ->
+    bar;
+handle_info(bar, _State) ->
+    throw(blarf);
 handle_info(Info, State) ->
     {Str, _} = trunc_io:print(Info, State#state.max_len),
-    io:format("~w: ~s:handle_info got ~w\n", [self(), ?MODULE, Str]),
+    io:format("~w: ~s:handle_info got ~s\n", [self(), ?MODULE, Str]),
     {noreply, State}.
 
 %%----------------------------------------------------------------------

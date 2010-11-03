@@ -14,6 +14,72 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
+%% @doc A memory-limited info/error/warning event handler.
+%%
+%% Replace the OTP default error_logger's event handler (which
+%% can cause memory use problems when handling very large messages)
+%% with a handler that will use a limited amount of RAM but is
+%% otherwise equivalent.
+%%
+%% Strictly speaking, this library need be a "code only" application,
+%% i.e. an OTP application without any support processes (like the
+%% <tt>stdlib</tt> OTP application).  However, there's one significant
+%% reason why <tt>riak_err</tt> would want to have a small monitoring
+%% server running.  The reason is as follows:
+%%
+%% The OTP <tt>kernel</tt> application's has a gen_event-based process
+%% with the registered name <tt>error_logger</tt> that handles all
+%% system info/error/warning messages, e.g., submitted by
+%% <tt>error_logger:info_msg()</tt> and related functions.  If there
+%% is a problem with an <tt>error_logger</tt> event handler (e.g.,
+%% throws an exception), the handler is silently removed from handling
+%% further events.
+%%
+%% We wish to know about all events, good and bad, despite software
+%% bugs.  Therefore, if there's an error in an event handler, we want
+%% a monitor process to find out about the error and act to re-install
+%% the handler.  If we don't re-install the handler, we will
+%% <em>never</em> see another event logged.  We want happy event
+%% logging, but we do not want to travel the "Ignorance is bliss" road
+%% to find that happiness.
+%%
+%% <ol>
+%%
+%% <li> We use a long-lived gen_server-based process (running code in
+%% this module) to be our monitor. </li>
+%%
+%% <li> We install the handler using
+%% <tt>gen_event:add_sup_handler/3</tt>.  If the handler exits or
+%% throws an exception, we'll be sent a <tt>{gen_event_EXIT, ...}</tt>
+%% message. </li>
+%%
+%% <li> If we receive the <tt>{gen_event_EXIT, ...}</tt> bad news
+%% message, we exit.  Our supervisor will restart us, and the
+%% side-effect of running our <tt>init()</tt> function is
+%% re-installing our custom event handler. </li>
+%%
+%%</ol>
+%%
+%% === Configuration ===
+%%
+%% There are two config knobs may be specified on the command line
+%% via "-riak_err KnobName Integer" on the command line or (in a
+%% Basho application like Riak) via the same "-riak_err KnobName Integer"
+%% line in the <tt>etc/vm.args</tt> file):
+%%
+%% <ol>
+%% <li> <tt>term_max_size</tt> For arguments formatted in FormatString &amp;
+%% ArgList style, if the total size of ArgList is more than term_max_size,
+%% then we'll ignore FormatString and log the message with a well-known
+%% (and therefore safe) formatting string.  The default is 10KBytes. </li>
+%%
+%% <li> <tt>fmt_max_bytes</tt> When formatting a log-related term that might
+%% be "big", limit the term's formatted output to a maximum of
+%% <tt>fmt_max_bytes</tt> bytes.  The default is 12KBytes. </li>
+%% </ol>
+%%
+%% For example, <tt>erl -riak_err term_max_size 8192 fmt_max_bytes 9000</tt>.
+
 -module(riak_err_app).
 
 -behaviour(application).

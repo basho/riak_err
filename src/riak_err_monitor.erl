@@ -14,6 +14,8 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
+%% @doc Small server to monitor the riak_err custom SASL event handler.
+
 -module(riak_err_monitor).
 
 -behaviour(gen_server).
@@ -55,7 +57,7 @@ stop() ->
 %%----------------------------------------------------------------------
 init([]) ->
     %% Add our custom handler.
-    ok = gen_event:add_sup_handler(error_logger, riak_err_handler, []),
+    ok = riak_err_handler:add_sup_handler(),
 
     %% Disable the default error logger handlers and SASL handlers.
     [gen_event:delete_handler(error_logger, Handler, {stop_please, ?MODULE}) ||
@@ -83,7 +85,8 @@ handle_call(_Request, _From, State) ->
 %%----------------------------------------------------------------------
 handle_cast(Msg, State) ->
     {Str, _} = trunc_io:print(Msg, State#state.max_len),
-    io:format("~w: ~s:handle_cast got ~s\n", [self(), ?MODULE, Str]),
+    error_logger:error_msg("~w: ~s:handle_cast got ~s\n",
+                           [self(), ?MODULE, Str]),
     {noreply, State}.
 
 %%----------------------------------------------------------------------
@@ -94,19 +97,20 @@ handle_cast(Msg, State) ->
 %%----------------------------------------------------------------------
 handle_info({gen_event_EXIT, Handler, Reason}, State) ->
     %% Our handler ought to be bullet-proof ... but it wasn't, bummer.
+    %% Double bummer, we cannot use the handler to log this event.
+    %%
     %% We will stop now, and our supervisor will restart us and thus
-    %% reinstate the custom event handler.
+    %% reinstate the custom event handler.  If all goes well, we will
+    %% be restarted after only a few milliseconds.
+
     {Str, _} = trunc_io:print(Reason, State#state.max_len),
     io:format("~w: ~s: handler ~w exited for reason ~s\n",
               [self(), ?MODULE, Handler, Str]),
     {stop, gen_event_EXIT, State};
-handle_info(foo, _State) ->
-    bar;
-handle_info(bar, _State) ->
-    throw(blarf);
 handle_info(Info, State) ->
     {Str, _} = trunc_io:print(Info, State#state.max_len),
-    io:format("~w: ~s:handle_info got ~s\n", [self(), ?MODULE, Str]),
+    error_logger:error_msg("~w: ~s:handle_info got ~s\n", 
+                           [self(), ?MODULE, Str]),
     {noreply, State}.
 
 %%----------------------------------------------------------------------

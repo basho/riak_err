@@ -14,25 +14,13 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
-%% @doc Replace the OTP default error_logger's event handler (which
+%% @doc A memory-limited info/error/warning event handler.
+%%
+%% Replace the OTP default error_logger's event handler (which
 %% can cause memory use problems when handling very large messages)
 %% with a handler that will use a limited amount of RAM but is
 %% otherwise equivalent.
 %%
-%% There are two config knobs may be specified on the command line
-%% via "-riak_err KnobName Integer" on the command line or (in a
-%% Basho application like Riak) via the same "-riak_err KnobName Integer"
-%% line in the <tt>etc/vm.args</tt> file):
-%% <ol>
-%% <li> <tt>term_max_size</tt> For arguments formatted in FormatString &amp;
-%% ArgList style, if the total size of ArgList is more than term_max_size,
-%% then we'll ignore FormatString and log the message with a well-known
-%% (and therefore safe) formatting string.  The default is 10KBytes. </li>
-%% <li> <tt>fmt_max_bytes</tt> When formatting a log-related term that might
-%% be "big", limit the term's formatted output to a maximum of
-%% <tt>fmt_max_bytes</tt> bytes.  The default is 12KBytes. </li>
-%% </ol>
-
 %% TODO:
 %%
 %% * The default Riak* stuff uses the
@@ -41,16 +29,13 @@
 %%   That means that I need to reimplement level filtering and formatting
 %%   and scribbling to a file??
 %% * Find TODO labels and fix them
-%% * Double-check license compat:
-%%     * trunc_io:
-%%     * EPL stuff at bottom
 
 -module(riak_err_handler).
 
 -behaviour(gen_event).
 
 %% External exports
--export([start_link/0, add_handler/0,
+-export([add_sup_handler/0,
          set_term_max_size/1, set_fmt_max_bytes/1,
          get_state/0]).
 
@@ -59,7 +44,6 @@
          code_change/3]).
 
 -record(state, {
-          %% .
           term_max_size = 10000,
           fmt_max_bytes = 8000
          }).
@@ -67,17 +51,24 @@
 %%%----------------------------------------------------------------------
 %%% API
 %%%----------------------------------------------------------------------
-start_link() ->
-    gen_event:start_link({local, ?MODULE}). 
 
-add_handler() ->
-    gen_event:add_handler(?MODULE, ?MODULE, []).
+%% @doc Add a supervised handler to the OTP kernel's
+%%      <tt>error_logger</tt> event server.
+
+add_sup_handler() ->
+    gen_event:add_sup_handler(error_logger, ?MODULE, []).
+
+%% @doc Change the internal value of <tt>set_term_max_size</tt>.
 
 set_term_max_size(Num) ->
     gen_event:call(error_logger, ?MODULE, {set_term_max_size, Num}, infinity).
 
+%% @doc Change the internal value of <tt>set_fmt_max_bytes</tt>.
+
 set_fmt_max_bytes(Num) ->
     gen_event:call(error_logger, ?MODULE, {set_fmt_max_bytes, Num}, infinity).
+
+%% @doc Debugging: get internal state record.
 
 get_state() ->
     gen_event:call(error_logger, ?MODULE, {get_state}, infinity).

@@ -17,6 +17,13 @@
 %% %CopyrightEnd%
 %%
 
+%% @doc Functions from Erlang OTP distribution that are really useful
+%% but aren't exported.
+%%
+%% All functions in this module are covered by the Erlang/OTP source
+%% distribution's license, the Erlang Public License.  See
+%% http://www.erlang.org/ for full details.
+
 -module(riak_err_stdlib).
 -export([write_time/2, maybe_utc/1]).
 -export([is_my_error_report/1, is_my_info_report/1]).

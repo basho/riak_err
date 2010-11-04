@@ -241,9 +241,17 @@ sasl_limited_str(progress, Report, #state{fmt_max_bytes = FmtMaxBytes}) ->
 sasl_limited_str(crash_report, Report, #state{fmt_max_bytes = FmtMaxBytes}) ->
     riak_err_stdlib:proc_lib_format(Report, FmtMaxBytes).
 
-get_int_env(Name, Default) when is_atom(Name) ->
-    get_int_env(atom_to_list(Name), Default);
 get_int_env(Name, Default) ->
+    case application:get_env(riak_err, Name) of
+        {ok, Val} ->
+            Val;
+        _ ->
+            get_int_env2(Name, Default)
+    end.            
+
+get_int_env2(Name, Default) when is_atom(Name) ->
+    get_int_env2(atom_to_list(Name), Default);
+get_int_env2(Name, Default) ->
     case init:get_argument(riak_err) of
         {ok, ListOfLists} ->
             find_int_in_pairs(lists:append(ListOfLists), Name, Default);

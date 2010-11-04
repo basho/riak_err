@@ -65,7 +65,8 @@
 %% There are two config knobs may be specified on the command line
 %% via "-riak_err KnobName Integer" on the command line or (in a
 %% Basho application like Riak) via the same "-riak_err KnobName Integer"
-%% line in the <tt>etc/vm.args</tt> file):
+%% line in the <tt>etc/vm.args</tt> file).  Alternatively, these properties
+%% may be set using application environment variables by the same name.
 %%
 %% <ol>
 %% <li> <tt>term_max_size</tt> For arguments formatted in FormatString &amp;

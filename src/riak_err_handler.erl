@@ -21,13 +21,22 @@
 %% with a handler that will use a limited amount of RAM but is
 %% otherwise equivalent.
 %%
-%% TODO:
-%%
-%% * The default Riak* stuff uses the
-%%   {sasl_error_logger, {file, File}} -> sasl_report_file_h handler.
-%%   (Also in app.config: {errlog_type, error})
-%%   That means that I need to reimplement level filtering and formatting
-%%   and scribbling to a file??
+%% If the SASL error logger's <tt>sasl_error_logger</tt> configuration
+%% parameter is set to the <tt>{file, FileName}</tt> form, then this
+%% module will attempt to emulate the SASL error logger's
+%% logging-to-file behavior.  However, the interpretation of the
+%% <tt>errlog_type</tt> configuration parameter is limited: if its
+%% value is <tt>error</tt>, then only error and warning messages will
+%% be written to the file.  In all other cases (namely
+%% <tt>progress</tt> and <tt>all</tt>), all events will be formatted
+%% and written to the file.
+%% <ul>
+%% <li> <b>NOTE:</b> The log file's filehandle will be re-opened once
+%%                   per second, which will allow log file rotation schemes
+%%                   to rotate the log file safely without undue worry about
+%%                   losing log file entries or worrying about sending a
+%%                   SIGHUP signal to the owner process before rotation. </li>
+%% </ul>
 
 -module(riak_err_handler).
 
@@ -35,7 +44,7 @@
 
 %% External exports
 -export([add_sup_handler/0,
-         set_term_max_size/1, set_fmt_max_bytes/1,
+         set_term_max_size/1, set_fmt_max_bytes/1, reopen_log_file/0,
          get_state/0]).
 
 %% gen_event callbacks
@@ -43,8 +52,11 @@
          code_change/3]).
 
 -record(state, {
-          term_max_size = 10000,
-          fmt_max_bytes = 8000
+          term_max_size,
+          fmt_max_bytes,
+          log_path,
+          log_fh,
+          errlog_type
          }).
 
 %%%----------------------------------------------------------------------
@@ -67,6 +79,12 @@ set_term_max_size(Num) ->
 set_fmt_max_bytes(Num) ->
     gen_event:call(error_logger, ?MODULE, {set_fmt_max_bytes, Num}, infinity).
 
+%% @doc Tell our error handler to reopen the <tt>sasl_error_logger</tt> file's
+%%      file handle (e.g., to assist log file rotation schemes).
+
+reopen_log_file() ->
+    gen_event:call(error_logger, riak_err_handler, reopen_log_file, infinity).
+
 %% @doc Debugging: get internal state record.
 
 get_state() ->
@@ -84,8 +102,22 @@ get_state() ->
 init([]) ->
     TermMaxSize = get_int_env(term_max_size, 10*1024),
     FmtMaxBytes = get_int_env(fmt_max_bytes, 12*1024),
+    {LogPath, LogFH} = case application:get_env(sasl, sasl_error_logger) of
+                           {ok, {file, Path}} ->
+                               FH = open_log_file(Path),
+                               {Path, FH};
+                           _ ->
+                               {undefined, undefined}
+                       end,
+    ErrlogType = case application:get_env(sasl, errlog_type) of
+                     {ok, error} -> error;
+                     _           -> all
+                 end,
     {ok, #state{term_max_size = TermMaxSize,
-                fmt_max_bytes = FmtMaxBytes}}.
+                fmt_max_bytes = FmtMaxBytes,
+                log_path = LogPath,
+                log_fh = LogFH,
+                errlog_type = ErrlogType}}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_event/2
@@ -104,6 +136,15 @@ handle_event(Event, State) ->
 %%          {swap_handler, Reply, Args1, State1, Mod2, Args2} |
 %%          {remove_handler, Reply}                            
 %%----------------------------------------------------------------------
+handle_call(reopen_log_file, State) ->
+    case State#state.log_fh of
+        undefined ->
+            {ok, ok, State};
+        _ ->
+            catch file:close(State#state.log_fh),
+            FH = open_log_file(State#state.log_path),
+            {ok, ok, State#state{log_fh = FH}}
+    end;
 handle_call({set_term_max_size, Num}, State) ->
     {ok, ok, State#state{term_max_size = Num}};
 handle_call({set_fmt_max_bytes, Num}, State) ->
@@ -140,40 +181,45 @@ code_change(_OldVsn, State, _Extra) ->
 
 format_event(Event, S) ->
     %% Case clauses appear the same order as error_logger_tty_h:write_event/1.
-    {ReportStr, Pid, MsgStr} =
+    {ReportStr, Pid, MsgStr, ErrorP} =
         case Event of
             {_Type, GL, _Msg} when node(GL) /= node() ->
-                {ignore, ignore, ignore};
+                {ignore, ignore, ignore, false};
             {error, _GL, {Pid1, Fmt, Args}} ->
-                {"ERROR REPORT", Pid1, limited_fmt(Fmt, Args, S)};
+                {"ERROR REPORT", Pid1, limited_fmt(Fmt, Args, S), true};
             %% SLF: non-standard string below.
             {emulator, _GL, Chars} ->
-                {"ERROR REPORT", emulator, Chars};
+                {"ERROR REPORT", emulator, Chars, false};
             {info, _GL, {Pid1, Info, _}} ->
-                {"INFO REPORT", Pid1, limited_str(Info, S)};
+                {"INFO REPORT", Pid1, limited_str(Info, S), false};
             {error_report, _GL, {Pid1, std_error, Rep}} ->
-                {"ERROR REPORT", Pid1, limited_str(Rep, S)};
+                {"ERROR REPORT", Pid1, limited_str(Rep, S), true};
             {error_report, _GL, Other} ->
                 perhaps_a_sasl_report(error_report, Other, S);
             {info_report, _GL, {Pid1, std_info, Rep}} ->
-                {"INFO REPORT", Pid1, limited_str(Rep, S)};
+                {"INFO REPORT", Pid1, limited_str(Rep, S), false};
             {info_report, _GL, Other} ->
                 perhaps_a_sasl_report(info_report, Other, S);
             {info_msg, _GL, {Pid1, Fmt, Args}} ->
-                {"INFO REPORT", Pid1, limited_fmt(Fmt, Args, S)};
+                {"INFO REPORT", Pid1, limited_fmt(Fmt, Args, S), false};
             {warning_report, _GL, {Pid1, std_warning, Rep}} ->
-                {"WARNING REPORT", Pid1, limited_str(Rep, S)};
+                {"WARNING REPORT", Pid1, limited_str(Rep, S), true};
             {warning_msg, _GL, {Pid1, Fmt, Args}} ->
-                {"WARNING REPORT", Pid1, limited_fmt(Fmt, Args, S)};
+                {"WARNING REPORT", Pid1, limited_fmt(Fmt, Args, S), true};
             %% This type is allegedly ignored, so whatever.
             _E ->
-                {"ODD REPORT", "blahblah", limited_fmt("odd ~p", [_E], S)}
+                {"ODD REPORT", "blahblah", limited_fmt("odd ~p", [_E], S), false}
         end,
     if ReportStr == ignore ->
-            ok;
+            "";
        true ->
             Time = riak_err_stdlib:write_time(riak_err_stdlib:maybe_utc(erlang:localtime()), ReportStr),
             NodeSuffix = other_node_suffix(Pid),
+            if ErrorP orelse S#state.errlog_type /= error ->
+                    file:write(S#state.log_fh, [Time, MsgStr, NodeSuffix]);
+               true ->
+                    ok
+            end,
             io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix])
     end.
 
@@ -200,7 +246,7 @@ perhaps_a_sasl_report(error_report, {Pid, Type, Report}, S) ->
     case riak_err_stdlib:is_my_error_report(Type) of
         true ->
             {sasl_type_to_report_head(Type), Pid,
-             sasl_limited_str(Type, Report, S)};
+             sasl_limited_str(Type, Report, S), true};
         false ->
             {ignore, ignore, ignore}
     end;
@@ -208,7 +254,7 @@ perhaps_a_sasl_report(info_report, {Pid, Type, Report}, S) ->
     case riak_err_stdlib:is_my_info_report(Type) of
         true ->
             {sasl_type_to_report_head(Type), Pid,
-             sasl_limited_str(Type, Report, S)};
+             sasl_limited_str(Type, Report, S), false};
         false ->
             {ignore, ignore, ignore}
     end;
@@ -266,3 +312,6 @@ find_int_in_pairs([_K, _V|Tail], Key, Default) ->
 find_int_in_pairs(_, _, Default) ->
     Default.
 
+open_log_file(Path) ->
+    {ok, FH} = file:open(Path, [append, raw, binary]),
+    FH.

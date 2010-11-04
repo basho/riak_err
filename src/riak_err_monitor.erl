@@ -32,7 +32,7 @@
 
 -record(state, {
           max_len = 20*1024,
-          glarf
+          tref
          }).
 
 %%%----------------------------------------------------------------------
@@ -63,7 +63,8 @@ init([]) ->
     [gen_event:delete_handler(error_logger, Handler, {stop_please, ?MODULE}) ||
         Handler <- [error_logger, error_logger_tty_h, sasl_report_tty_h,
                     sasl_report_file_h]],
-    {ok, #state{glarf = lists:duplicate(77666, $y)}}.
+    {ok, TRef} = timer:send_interval(1000, reopen_log_file),
+    {ok, #state{tref = TRef}}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_call/3
@@ -95,6 +96,9 @@ handle_cast(Msg, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %%----------------------------------------------------------------------
+handle_info(reopen_log_file, State) ->
+    ok = riak_err_handler:reopen_log_file(),
+    {noreply, State};
 handle_info({gen_event_EXIT, Handler, Reason}, State) ->
     %% Our handler ought to be bullet-proof ... but it wasn't, bummer.
     %% Double bummer, we cannot use the handler to log this event.

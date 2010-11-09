@@ -55,7 +55,11 @@ maybe_utc(Time) ->
           end,
     if
         UTC =:= true ->
-            {utc, calendar:local_time_to_universal_time_dst(Time)};
+            UTCTime = case calendar:local_time_to_universal_time_dst(Time) of
+                          []     -> calendar:local_time();
+                          [T0|_] -> T0
+                      end,
+            {utc, UTCTime};
         true -> 
             Time
     end.

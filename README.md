@@ -65,7 +65,7 @@ Configuration
 
 There are two config knobs may be specified on the command line
 via `-riak_err KnobName Integer` on the command line or (in a
-Basho application like Riak) via the same `-riak_err KnobName Integer`
+Basho application like Riak, via the same `-riak_err KnobName Integer`
 line in the `etc/vm.args` file).  Alternatively, these properties
 may be set using application environment variables by the same name.
 

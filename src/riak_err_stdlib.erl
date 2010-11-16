@@ -114,7 +114,7 @@ proc_lib_format([OwnReport,LinkReport], FmtMaxBytes) ->
 format_report(Rep, FmtMaxBytes) when is_list(Rep) ->
     format_rep(Rep, FmtMaxBytes);
 format_report(Rep, FmtMaxBytes) ->
-    {Str, _} = trunc_io:format(Rep, FmtMaxBytes),
+    {Str, _} = trunc_io:print(Rep, FmtMaxBytes),
     io_lib:format("~p~n", [Str]).
 
 format_rep([{initial_call,InitialCall}|Rep], FmtMaxBytes) ->
@@ -223,8 +223,8 @@ explain_reason(function_clause, error, [{F,A}], _PF, _Str) ->
     FAs = io_lib:fwrite(<<"~w/~w">>, [F, A]),
     [<<"no function clause matching call to ">> | FAs];
 explain_reason(function_clause, error=Cl, [{M,F,As}], PF, Str) ->
-    Str = <<"no function clause matching ">>,
-    format_errstr_call(Str, Cl, {M,F}, As, PF, Str);
+    String = <<"no function clause matching ">>,
+    format_errstr_call(String, Cl, {M,F}, As, PF, Str);
 explain_reason(if_clause, error, [], _PF, _Str) ->
     <<"no true branch found when evaluating an if expression">>;
 explain_reason(noproc, error, [], _PF, _Str) ->
@@ -259,13 +259,13 @@ explain_reason({unbound,V}, error, [], _PF, _Str) ->
     io_lib:fwrite(<<"variable ~w is unbound">>, [V]);
 %% Exit codes local to the shell module (restricted shell):
 explain_reason({restricted_shell_bad_return, V}, exit=Cl, [], PF, Str) ->
-    Str = <<"restricted shell module returned bad value ">>,
-    format_value(V, Str, Cl, PF, Str);
+    String = <<"restricted shell module returned bad value ">>,
+    format_value(V, String, Cl, PF, Str);
 explain_reason({restricted_shell_disallowed,{ForMF,As}}, 
                exit=Cl, [], PF, Str) ->
     %% ForMF can be a fun, but not a shell fun.
-    Str = <<"restricted shell does not allow ">>,
-    format_errstr_call(Str, Cl, ForMF, As, PF, Str);
+    String = <<"restricted shell does not allow ">>,
+    format_errstr_call(String, Cl, ForMF, As, PF, Str);
 explain_reason(restricted_shell_started, exit, [], _PF, _Str) ->
     <<"restricted shell starts now">>;
 explain_reason(restricted_shell_stopped, exit, [], _PF, _Str) ->

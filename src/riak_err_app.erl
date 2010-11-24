@@ -90,11 +90,14 @@
          start/2,
          stop/1]).
 
+-spec start() -> 'ok' | {'error', term()}.
 start() ->
     application:start(riak_err).
 
+-spec start(normal | {takeover, node()} | {failover, node()}, term()) -> {ok, pid()}.
 start(_StartType, _StartArgs) ->
     riak_err_sup:start_link().
 
+-spec stop([]) -> ok.
 stop(_State) ->
     ok.

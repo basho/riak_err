@@ -26,9 +26,15 @@
 
 -define(SERVER, ?MODULE).
 
+%% From supervisor
+-type startlink_err() :: {'already_started', pid()} | 'shutdown' | term().
+-type startlink_ret() :: {'ok', pid()} | 'ignore' | {'error', startlink_err()}.
+
+-spec start_link() -> startlink_ret().
 start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
+-spec init([]) -> {ok, {{one_for_one, 1000, 3600}, [supervisor:child_spec()]}}.
 init([]) ->
     RestartStrategy = one_for_one,
     MaxRestarts = 1000,

@@ -36,6 +36,7 @@
 
 %% @doc Returns an flattened list containing the ASCII representation of the given
 %% term.
+-spec fprint(term(), pos_integer()) -> string().
 fprint(T, Max) -> 
     {L, _} = print(T, Max),
     lists:flatten(L).
@@ -49,6 +50,7 @@ fprint(T, Max) ->
 %% depth-limited instead of length limited, so you might run out
 %% memory printing it. Out of the frying pan and into the fire.
 %% 
+-spec safe(term(), pos_integer()) -> {string(), pos_integer()} | {string()}.
 safe(What, Len) ->
     case catch print(What, Len) of
 	{L, Used} when is_list(L) -> {L, Used};
@@ -56,6 +58,7 @@ safe(What, Len) ->
     end.	     
 
 %% @doc Returns {List, Length}
+-spec print(term(), pos_integer()) -> {iolist(), pos_integer()}.
 print(_, Max) when Max < 0 -> {"...", 3};
 print(Tuple, Max) when is_tuple(Tuple) -> 
     {TC, Len} = tuple_contents(Tuple, Max-2),
@@ -166,9 +169,11 @@ alist(L, Max) ->
 
 %%--------------------
 %% The start of a test suite. So far, it only checks for not crashing.
+-spec test() -> ok.
 test() ->
     test(trunc_io, print).
 
+-spec test(atom(), atom()) -> ok.
 test(Mod, Func) ->
     Simple_items = [atom, 1234, 1234.0, {tuple}, [], [list], "string", self(),
 		    <<1,2,3>>, make_ref(), fun() -> ok end],
@@ -196,12 +201,14 @@ test(Mod, Func) ->
     
     lists:foreach(G, Tuples),
     lists:foreach(G, Lists).
-    
+
+-spec perf() -> ok.
 perf() ->
     {New, _} = timer:tc(trunc_io, perf, [trunc_io, print, 1000]),
     {Old, _} = timer:tc(trunc_io, perf, [io_lib, write, 1000]),
     io:fwrite("New code took ~p us, old code ~p\n", [New, Old]).
 
+-spec perf(atom(), atom(), integer()) -> done.
 perf(M, F, Reps) when Reps > 0 ->
     test(M,F),
     perf(M,F,Reps-1);
@@ -209,6 +216,7 @@ perf(_,_,_) ->
     done.    
 
 %% Performance test. Needs a particularly large term I saved as a binary...
+-spec perf1() -> {non_neg_integer(), non_neg_integer()}.
 perf1() ->
     {ok, Bin} = file:read_file("bin"),
     A = binary_to_term(Bin),

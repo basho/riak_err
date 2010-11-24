@@ -31,16 +31,18 @@
          code_change/3]).
 
 -record(state, {
-          max_len = 20*1024,
-          tref
+          max_len = 20*1024 :: pos_integer(),
+          tref              :: timer:tref()
          }).
 
 %%%----------------------------------------------------------------------
 %%% API
 %%%----------------------------------------------------------------------
+-spec start_link() -> {ok, pid()} | ignore | {error, term()}.
 start_link() ->
     gen_server:start_link({local, ?NAME}, ?MODULE, [], []).
 
+-spec stop() -> ok.
 stop() ->
     gen_event:call(?NAME, stop, infinity).
 
@@ -55,14 +57,18 @@ stop() ->
 %%          ignore               |
 %%          {stop, Reason}
 %%----------------------------------------------------------------------
+-spec init([]) -> {ok, #state{}}.
 init([]) ->
     %% Add our custom handler.
     ok = riak_err_handler:add_sup_handler(),
 
     %% Disable the default error logger handlers and SASL handlers.
-    [gen_event:delete_handler(error_logger, Handler, {stop_please, ?MODULE}) ||
-        Handler <- [error_logger, error_logger_tty_h, sasl_report_tty_h,
-                    sasl_report_file_h]],
+    ok = lists:foreach(
+           fun(Handler) ->
+                   gen_event:delete_handler(error_logger, Handler, {stop_please, ?MODULE})
+           end,
+           [error_logger, error_logger_tty_h, sasl_report_tty_h, sasl_report_file_h]),
+    
     {ok, TRef} = timer:send_interval(1000, reopen_log_file),
     {ok, #state{tref = TRef}}.
 
@@ -75,8 +81,11 @@ init([]) ->
 %%          {stop, Reason, Reply, State}   | (terminate/2 is called)
 %%          {stop, Reason, State}            (terminate/2 is called)
 %%----------------------------------------------------------------------
+-spec handle_call(stop | term(), reference(), #state{}) -> {stop, normal, ok, #state{}} | {reply, not_implemented, #state{}}.
+handle_call(stop, _From, State) ->
+  {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
-    {reply, not_implemented, State}.
+  {reply, not_implemented, State}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_cast/2
@@ -84,6 +93,7 @@ handle_call(_Request, _From, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %%----------------------------------------------------------------------
+-spec handle_cast(tuple(), #state{}) -> {noreply, #state{}}.
 handle_cast(Msg, State) ->
     {Str, _} = trunc_io:print(Msg, State#state.max_len),
     error_logger:error_msg("~w: ~s:handle_cast got ~s\n",
@@ -96,6 +106,7 @@ handle_cast(Msg, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %%----------------------------------------------------------------------
+-spec handle_info(reopen_log_file | {gen_event_EXIT, ?MODULE, term()} | tuple(), #state{}) -> {noreply, #state{}} | {stop, gen_event_EXIT, #state{}}.
 handle_info(reopen_log_file, State) ->
     ok = riak_err_handler:reopen_log_file(),
     {noreply, State};
@@ -122,9 +133,11 @@ handle_info(Info, State) ->
 %% Purpose: Shutdown the server
 %% Returns: any (ignored by gen_server)
 %%----------------------------------------------------------------------
+-spec terminate(term(), #state{}) -> ok.
 terminate(_Reason, _State) ->
     ok.
 
+-spec code_change(term(), #state{}, term()) -> {ok, #state{}}.
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 

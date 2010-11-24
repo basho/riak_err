@@ -52,11 +52,11 @@
          code_change/3]).
 
 -record(state, {
-          term_max_size,
-          fmt_max_bytes,
-          log_path,
-          log_fh,
-          errlog_type
+          term_max_size :: pos_integer(),
+          fmt_max_bytes :: pos_integer(),
+          log_path      :: undefined | string(),
+          log_fh        :: undefined | file:io_device(),
+          errlog_type   :: error | progress | all
          }).
 
 %%%----------------------------------------------------------------------
@@ -65,28 +65,28 @@
 
 %% @doc Add a supervised handler to the OTP kernel's
 %%      <tt>error_logger</tt> event server.
-
+-spec add_sup_handler() -> term().
 add_sup_handler() ->
     gen_event:add_sup_handler(error_logger, ?MODULE, []).
 
 %% @doc Change the internal value of <tt>set_term_max_size</tt>.
-
+-spec set_term_max_size(pos_integer()) -> ok.
 set_term_max_size(Num) ->
     gen_event:call(error_logger, ?MODULE, {set_term_max_size, Num}, infinity).
 
 %% @doc Change the internal value of <tt>set_fmt_max_bytes</tt>.
-
+-spec set_fmt_max_bytes(pos_integer()) -> ok.
 set_fmt_max_bytes(Num) ->
     gen_event:call(error_logger, ?MODULE, {set_fmt_max_bytes, Num}, infinity).
 
 %% @doc Tell our error handler to reopen the <tt>sasl_error_logger</tt> file's
 %%      file handle (e.g., to assist log file rotation schemes).
-
+-spec reopen_log_file() -> ok.
 reopen_log_file() ->
     gen_event:call(error_logger, riak_err_handler, reopen_log_file, infinity).
 
 %% @doc Debugging: get internal state record.
-
+-spec get_state() -> #state{}.
 get_state() ->
     gen_event:call(error_logger, ?MODULE, {get_state}, infinity).
 
@@ -99,6 +99,7 @@ get_state() ->
 %% Returns: {ok, State}          |
 %%          Other
 %%----------------------------------------------------------------------
+-spec init([]) -> {ok, #state{}}.
 init([]) ->
     TermMaxSize = get_int_env(term_max_size, 10*1024),
     FmtMaxBytes = get_int_env(fmt_max_bytes, 12*1024),
@@ -125,6 +126,7 @@ init([]) ->
 %%          {swap_handler, Args1, State1, Mod2, Args2} |
 %%          remove_handler                              
 %%----------------------------------------------------------------------
+-spec handle_event({atom(), pid(), {pid(), string() | atom(), any()}}, #state{}) -> {ok, #state{}}.
 handle_event(Event, State) ->
     Formatted = format_event(Event, State),
     io:put_chars(Formatted),
@@ -136,6 +138,7 @@ handle_event(Event, State) ->
 %%          {swap_handler, Reply, Args1, State1, Mod2, Args2} |
 %%          {remove_handler, Reply}                            
 %%----------------------------------------------------------------------
+-spec handle_call(term(), #state{}) -> {ok, ok, #state{}}.
 handle_call(reopen_log_file, State) ->
     case State#state.log_fh of
         undefined ->
@@ -161,6 +164,7 @@ handle_call(_Request, State) ->
 %%          {swap_handler, Args1, State1, Mod2, Args2} |
 %%          remove_handler                              
 %%----------------------------------------------------------------------
+-spec handle_info(term(), #state{}) -> {ok, #state{}}.
 handle_info(_Info, State) ->
     {ok, State}.
 
@@ -169,9 +173,11 @@ handle_info(_Info, State) ->
 %% Purpose: Shutdown the server
 %% Returns: any
 %%----------------------------------------------------------------------
+-spec terminate(term(), #state{}) -> ok.
 terminate(_Reason, _State) ->
     ok.
 
+-spec code_change(term(), #state{}, term()) -> {ok, #state{}}.
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 

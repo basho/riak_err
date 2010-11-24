@@ -34,7 +34,9 @@
 start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
--spec init([]) -> {ok, {{one_for_one, 1000, 3600}, [supervisor:child_spec()]}}.
+% R14B spec is commented, use R13B spec for now.
+%-spec init([]) -> {ok, {{one_for_one, 1000, 3600}, [supervisor:child_spec()]}}.
+-spec init([]) -> {ok, {{one_for_one, 1000, 3600}, [tuple()]}}.
 init([]) ->
     RestartStrategy = one_for_one,
     MaxRestarts = 1000,

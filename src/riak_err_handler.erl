@@ -248,7 +248,7 @@ perhaps_a_sasl_report(error_report, {Pid, Type, Report}, S) ->
             {sasl_type_to_report_head(Type), Pid,
              sasl_limited_str(Type, Report, S), true};
         false ->
-            {ignore, ignore, ignore}
+            {ignore, ignore, ignore, false}
     end;
 perhaps_a_sasl_report(info_report, {Pid, Type, Report}, S) ->
     case riak_err_stdlib:is_my_info_report(Type) of
@@ -256,10 +256,10 @@ perhaps_a_sasl_report(info_report, {Pid, Type, Report}, S) ->
             {sasl_type_to_report_head(Type), Pid,
              sasl_limited_str(Type, Report, S), false};
         false ->
-            {ignore, ignore, ignore}
+            {ignore, ignore, ignore, false}
     end;
 perhaps_a_sasl_report(_, _, _) ->
-    {ignore, ignore, ignore}.
+    {ignore, ignore, ignore, false}.
 
 sasl_type_to_report_head(supervisor_report) ->
     "SUPERVISOR REPORT";

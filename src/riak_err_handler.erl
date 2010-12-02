@@ -210,6 +210,8 @@ format_event(Event, S) ->
                 {"INFO REPORT", Pid1, limited_fmt(Fmt, Args, S), false};
             {warning_report, _GL, {Pid1, std_warning, Rep}} ->
                 {"WARNING REPORT", Pid1, limited_str(Rep, S), true};
+            {warning_report, _GL, _Other} ->
+                {ignore, ignore, ignore, false};
             {warning_msg, _GL, {Pid1, Fmt, Args}} ->
                 {"WARNING REPORT", Pid1, limited_fmt(Fmt, Args, S), true};
             %% This type is allegedly ignored, so whatever.

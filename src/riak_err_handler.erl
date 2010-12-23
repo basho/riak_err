@@ -25,11 +25,10 @@
 %% parameter is set to the <tt>{file, FileName}</tt> form, then this
 %% module will attempt to emulate the SASL error logger's
 %% logging-to-file behavior.  However, the interpretation of the
-%% <tt>errlog_type</tt> configuration parameter is limited: if its
-%% value is <tt>error</tt>, then only error and warning messages will
-%% be written to the file.  In all other cases (namely
-%% <tt>progress</tt> and <tt>all</tt>), all events will be formatted
-%% and written to the file.
+%% <tt>errlog_type</tt> configuration parameter differs with respect to
+%% the handling of SASL progress reports: if the <tt>errlog_type</tt>
+%% value is <tt>error</tt>, then SASL error-level progress reports will be 
+%% written to the file.
 %% <ul>
 %% <li> <b>NOTE:</b> The log file's filehandle will be re-opened once
 %%                   per second, which will allow log file rotation schemes
@@ -37,10 +36,21 @@
 %%                   losing log file entries or worrying about sending a
 %%                   SIGHUP signal to the owner process before rotation. </li>
 %% </ul>
+%%
+%% A new environment configuration variable, the <tt>riak_err</tt>
+%% application's <tt>console_error_type</tt> parameter, defines the
+%% handler's choices for writing formatted events to the console/tty.
+%% config values are not quite the same as the <tt>sasl</tt> application's
+%% <tt>errlog_type</tt> parameter: only <tt>error</tt> and <tt>all</tt>
+%% are valid and <tt>all</tt> is the default.
 
 -module(riak_err_handler).
 
 -behaviour(gen_event).
+
+-define(SUPERVISOR_REPORT, "SUPERVISOR REPORT").
+-define(CRASH_REPORT, "CRASH REPORT").
+-define(PROGRESS_REPORT, "PROGRESS REPORT").
 
 %% External exports
 -export([add_sup_handler/0,
@@ -56,7 +66,8 @@
           fmt_max_bytes :: pos_integer(),
           log_path      :: undefined | string(),
           log_fh        :: undefined | file:io_device(),
-          errlog_type   :: error | progress | all
+          errlog_type   :: error | progress | all,
+          conslog_type  :: error | all
          }).
 
 %%%----------------------------------------------------------------------
@@ -111,14 +122,16 @@ init([]) ->
                                {undefined, undefined}
                        end,
     ErrlogType = case application:get_env(sasl, errlog_type) of
-                     {ok, error} -> error;
-                     _           -> all
+                     {ok, ErrVal} -> ErrVal;
+                     _            -> all
                  end,
+    ConslogType = get_env_or_arg(console_error_type, all),
     {ok, #state{term_max_size = TermMaxSize,
                 fmt_max_bytes = FmtMaxBytes,
                 log_path = LogPath,
                 log_fh = LogFH,
-                errlog_type = ErrlogType}}.
+                errlog_type = ErrlogType,
+                conslog_type = ConslogType}}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_event/2
@@ -127,9 +140,21 @@ init([]) ->
 %%          remove_handler                              
 %%----------------------------------------------------------------------
 -spec handle_event({atom(), pid(), {pid(), string() | atom(), any()}}, #state{}) -> {ok, #state{}}.
-handle_event(Event, State) ->
-    Formatted = format_event(Event, State),
-    io:put_chars(Formatted),
+handle_event(Event, #state{errlog_type = ErrlogType, conslog_type = ConslogType,
+                           log_fh = LogFH} = State) ->
+    {ErrorP, ReportStr, Formatted} = format_event(Event, State),
+    case {is_sasl_reportstr(ReportStr), should_log_it(ConslogType, ErrorP, x)} of
+        {false, true} ->
+            io:put_chars(Formatted);
+        _ ->
+            ok
+    end,
+    case should_log_it(ErrlogType, ErrorP, ReportStr) of
+        true when LogFH /= undefined ->
+            file:write(LogFH, Formatted);
+        _ ->
+            ok
+    end,
     {ok, State}.
 
 %%----------------------------------------------------------------------
@@ -219,16 +244,12 @@ format_event(Event, S) ->
                 {"ODD REPORT", "blahblah", limited_fmt("odd ~p", [_E], S), false}
         end,
     if ReportStr == ignore ->
-            "";
+            {false, "", ""};
        true ->
             Time = riak_err_stdlib:write_time(riak_err_stdlib:maybe_utc(erlang:localtime()), ReportStr),
             NodeSuffix = other_node_suffix(Pid),
-            if ErrorP orelse S#state.errlog_type /= error ->
-                    file:write(S#state.log_fh, [Time, MsgStr, NodeSuffix]);
-               true ->
-                    ok
-            end,
-            io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix])
+            {ErrorP, ReportStr, io_lib:format("~s~s~s",
+                                              [Time, MsgStr, NodeSuffix])}
     end.
 
 limited_fmt(Fmt, Args, #state{fmt_max_bytes = FmtMaxBytes,
@@ -274,7 +295,7 @@ sasl_type_to_report_head(supervisor_report) ->
 sasl_type_to_report_head(crash_report) ->
     "CRASH REPORT";
 sasl_type_to_report_head(progress) ->
-    "PROGRESS REPORT".
+    ?PROGRESS_REPORT.
 
 sasl_limited_str(supervisor_report, Report,
                  #state{fmt_max_bytes = FmtMaxBytes}) ->
@@ -296,30 +317,56 @@ sasl_limited_str(crash_report, Report, #state{fmt_max_bytes = FmtMaxBytes}) ->
     riak_err_stdlib:proc_lib_format(Report, FmtMaxBytes).
 
 get_int_env(Name, Default) ->
+    int_ify(get_env_or_arg(Name, Default)).
+
+get_env_or_arg(Name, Default) ->
     case application:get_env(riak_err, Name) of
         {ok, Val} ->
             Val;
         _ ->
-            get_int_env2(Name, Default)
+            get_env_or_arg2(Name, Default)
     end.            
 
-get_int_env2(Name, Default) when is_atom(Name) ->
-    get_int_env2(atom_to_list(Name), Default);
-get_int_env2(Name, Default) ->
+get_env_or_arg2(Name, Default) when is_atom(Name) ->
+    get_env_or_arg2(atom_to_list(Name), Default);
+get_env_or_arg2(Name, Default) ->
     case init:get_argument(riak_err) of
         {ok, ListOfLists} ->
-            find_int_in_pairs(lists:append(ListOfLists), Name, Default);
+            find_in_pairs(lists:append(ListOfLists), Name, Default);
         error ->
             Default
     end.
 
-find_int_in_pairs([Key, Value|_], Key, _Default) ->
-    list_to_integer(Value);
-find_int_in_pairs([_K, _V|Tail], Key, Default) ->
-    find_int_in_pairs(Tail, Key, Default);
-find_int_in_pairs(_, _, Default) ->
+find_in_pairs([Key, Value|_], Key, _Default) ->
+    Value;
+find_in_pairs([_K, _V|Tail], Key, Default) ->
+    find_in_pairs(Tail, Key, Default);
+find_in_pairs(_, _, Default) ->
     Default.
+
+int_ify(X) when is_list(X) ->
+    list_to_integer(X);
+int_ify(X) when is_integer(X) ->
+    X.
 
 open_log_file(Path) ->
     {ok, FH} = file:open(Path, [append, raw, binary]),
     FH.
+
+should_log_it(progress, _, ?PROGRESS_REPORT) ->
+    true;
+should_log_it(progress, _, _) ->
+    false;
+should_log_it(error, ErrorP, _) ->
+    ErrorP;
+should_log_it(all, _, _) ->
+    true.
+
+is_sasl_reportstr(?SUPERVISOR_REPORT) ->
+    true;
+is_sasl_reportstr(?CRASH_REPORT) ->
+    true;
+is_sasl_reportstr(?PROGRESS_REPORT) ->
+    true;
+is_sasl_reportstr(_) ->
+    false.

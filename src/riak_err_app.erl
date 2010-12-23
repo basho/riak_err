@@ -77,6 +77,17 @@
 %% <li> <tt>fmt_max_bytes</tt> When formatting a log-related term that might
 %% be "big", limit the term's formatted output to a maximum of
 %% <tt>fmt_max_bytes</tt> bytes.  The default is 12KBytes. </li>
+%%
+%% <li> <tt>console_error_type</tt> Defines the
+%% handler's choices for writing formatted events to the console/tty.
+%% config values are not quite the same as the <tt>sasl</tt> application's
+%% <tt>errlog_type</tt> parameter: only <tt>error</tt> and <tt>all</tt>
+%% are valid.  The default is <tt>all</tt>. </li>
+%%
+%% <li> <tt>console_sasl_reports</tt> Defines whether or not SASL
+%% reports are written to the console/tty.  Valid values are Erlang
+%% boolean values.  The default is <tt>false</tt>. </li>
+%%
 %% </ol>
 %%
 %% For example, <tt>erl -riak_err term_max_size 8192 fmt_max_bytes 9000</tt>.

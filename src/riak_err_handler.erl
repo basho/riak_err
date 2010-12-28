@@ -339,7 +339,7 @@ sasl_limited_str(crash_report, Report, FmtMaxBytes) ->
     riak_err_stdlib:proc_lib_format(Report, FmtMaxBytes).
 
 get_int_env(Name, Default) ->
-    int_ify(get_env_or_arg(Name, Default)).
+    to_integer(get_env_or_arg(Name, Default)).
 
 get_env_or_arg(Name, Default) ->
     case application:get_env(riak_err, Name) of
@@ -366,9 +366,9 @@ find_in_pairs([_K, _V|Tail], Key, Default) ->
 find_in_pairs(_, _, Default) ->
     Default.
 
-int_ify(X) when is_list(X) ->
+to_integer(X) when is_list(X) ->
     list_to_integer(X);
-int_ify(X) when is_integer(X) ->
+to_integer(X) when is_integer(X) ->
     X.
 
 open_log_file(Path) ->

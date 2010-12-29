@@ -1,2 +1,3 @@
 doc
 ebin/*.beam
+.eunit

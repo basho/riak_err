@@ -22,7 +22,7 @@
 %%
 %% All functions in this module are covered by the Erlang/OTP source
 %% distribution's license, the Erlang Public License.  See
-%% {@link http://www.erlang.org/} for full details.
+%% <a href="http://www.erlang.org/">Erlang.org</a> for full details.
 
 -module(riak_err_stdlib).
 -export([write_time/2, maybe_utc/1]).

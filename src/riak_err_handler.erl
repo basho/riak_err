@@ -82,13 +82,13 @@
 add_sup_handler() ->
     gen_event:add_sup_handler(error_logger, ?MODULE, []).
 
-%% @doc Change the internal value of <tt>set_term_max_size</tt>.
+%% @doc Change the internal value of <tt>term_max_size</tt>.
 %% @spec set_term_max_size(pos_integer()) -> ok
 -spec set_term_max_size(pos_integer()) -> ok.
 set_term_max_size(Num) ->
     gen_event:call(error_logger, ?MODULE, {set_term_max_size, Num}, infinity).
 
-%% @doc Change the internal value of <tt>set_fmt_max_bytes</tt>.
+%% @doc Change the internal value of <tt>fmt_max_bytes</tt>.
 %% @spec set_fmt_max_bytes(pos_integer()) -> ok
 -spec set_fmt_max_bytes(pos_integer()) -> ok.
 set_fmt_max_bytes(Num) ->
@@ -207,8 +207,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% @doc Given an error_logger-style Event tuple, format it with the
 %%      constraints of TermMaxSize and FmtMaxSize.
 %%
-%% See limited_fmt/3 for the meaning of TermMaxSize and FmtMaxSize.
-
+%% See {@link limited_fmt/3} for the meaning of TermMaxSize and FmtMaxSize.
 format_event(Event, TermMaxSize, FmtMaxBytes) ->
     %% Case clauses appear the same order as error_logger_tty_h:write_event/1.
     {ReportStr, Pid, MsgStr, ErrorP} =
@@ -251,14 +250,14 @@ format_event(Event, TermMaxSize, FmtMaxBytes) ->
                                               [Time, MsgStr, NodeSuffix])}
     end.
 
--spec limited_fmt(string(), list(), integer(), integer()) -> iolist().
 %% @doc Format Fmt and Args similar to what io_lib:format/2 does but with 
 %%      limits on how large the formatted string may be.
 %%
 %% If the Args list's size is larger than TermMaxSize, then the
 %% formatting is done by trunc_io:print/2, where FmtMaxBytes is used
 %% to limit the formatted string's size.
-
+%% @spec limited_fmt(string(), list(), integer(), integer()) -> iolist()
+-spec limited_fmt(string(), list(), integer(), integer()) -> iolist().
 limited_fmt(Fmt, Args, TermMaxSize, FmtMaxBytes) ->
     TermSize = erts_debug:flat_size(Args),
     if TermSize > TermMaxSize ->

@@ -50,13 +50,7 @@ stop() ->
 %%% Callback functions from gen_server
 %%%----------------------------------------------------------------------
 
-%%----------------------------------------------------------------------
-%% Func: init/1
-%% Returns: {ok, State}          |
-%%          {ok, State, Timeout} |
-%%          ignore               |
-%%          {stop, Reason}
-%%----------------------------------------------------------------------
+%% @hidden
 -spec init([]) -> {ok, #state{}}.
 init([]) ->
     %% Add our custom handler.
@@ -72,27 +66,14 @@ init([]) ->
     {ok, TRef} = timer:send_interval(1000, reopen_log_file),
     {ok, #state{tref = TRef}}.
 
-%%----------------------------------------------------------------------
-%% Func: handle_call/3
-%% Returns: {reply, Reply, State}          |
-%%          {reply, Reply, State, Timeout} |
-%%          {noreply, State}               |
-%%          {noreply, State, Timeout}      |
-%%          {stop, Reason, Reply, State}   | (terminate/2 is called)
-%%          {stop, Reason, State}            (terminate/2 is called)
-%%----------------------------------------------------------------------
+%% @hidden
 -spec handle_call(stop | term(), reference(), #state{}) -> {stop, normal, ok, #state{}} | {reply, not_implemented, #state{}}.
 handle_call(stop, _From, State) ->
   {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
   {reply, not_implemented, State}.
 
-%%----------------------------------------------------------------------
-%% Func: handle_cast/2
-%% Returns: {noreply, State}          |
-%%          {noreply, State, Timeout} |
-%%          {stop, Reason, State}            (terminate/2 is called)
-%%----------------------------------------------------------------------
+%% @hidden
 -spec handle_cast(tuple(), #state{}) -> {noreply, #state{}}.
 handle_cast(Msg, State) ->
     {Str, _} = trunc_io:print(Msg, State#state.max_len),
@@ -100,12 +81,7 @@ handle_cast(Msg, State) ->
                            [self(), ?MODULE, Str]),
     {noreply, State}.
 
-%%----------------------------------------------------------------------
-%% Func: handle_info/2
-%% Returns: {noreply, State}          |
-%%          {noreply, State, Timeout} |
-%%          {stop, Reason, State}            (terminate/2 is called)
-%%----------------------------------------------------------------------
+%% @hidden
 -spec handle_info(reopen_log_file | {gen_event_EXIT, ?MODULE, term()} | tuple(), #state{}) -> {noreply, #state{}} | {stop, gen_event_EXIT, #state{}}.
 handle_info(reopen_log_file, State) ->
     ok = riak_err_handler:reopen_log_file(),
@@ -128,19 +104,12 @@ handle_info(Info, State) ->
                            [self(), ?MODULE, Str]),
     {noreply, State}.
 
-%%----------------------------------------------------------------------
-%% Func: terminate/2
-%% Purpose: Shutdown the server
-%% Returns: any (ignored by gen_server)
-%%----------------------------------------------------------------------
+%% @hidden
 -spec terminate(term(), #state{}) -> ok.
 terminate(_Reason, _State) ->
     ok.
 
+%% @hidden
 -spec code_change(term(), #state{}, term()) -> {ok, #state{}}.
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
-%%%----------------------------------------------------------------------
-%%% Internal functions
-%%%----------------------------------------------------------------------

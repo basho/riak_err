@@ -77,27 +77,32 @@
 
 %% @doc Add a supervised handler to the OTP kernel's
 %%      <tt>error_logger</tt> event server.
+%% @spec add_sup_handler() -> term()
 -spec add_sup_handler() -> term().
 add_sup_handler() ->
     gen_event:add_sup_handler(error_logger, ?MODULE, []).
 
 %% @doc Change the internal value of <tt>set_term_max_size</tt>.
+%% @spec set_term_max_size(pos_integer()) -> ok
 -spec set_term_max_size(pos_integer()) -> ok.
 set_term_max_size(Num) ->
     gen_event:call(error_logger, ?MODULE, {set_term_max_size, Num}, infinity).
 
 %% @doc Change the internal value of <tt>set_fmt_max_bytes</tt>.
+%% @spec set_fmt_max_bytes(pos_integer()) -> ok
 -spec set_fmt_max_bytes(pos_integer()) -> ok.
 set_fmt_max_bytes(Num) ->
     gen_event:call(error_logger, ?MODULE, {set_fmt_max_bytes, Num}, infinity).
 
 %% @doc Tell our error handler to reopen the <tt>sasl_error_logger</tt> file's
 %%      file handle (e.g., to assist log file rotation schemes).
+%% @spec reopen_log_file() -> ok
 -spec reopen_log_file() -> ok.
 reopen_log_file() ->
     gen_event:call(error_logger, riak_err_handler, reopen_log_file, infinity).
 
 %% @doc Debugging: get internal state record.
+%% @spec get_state() -> #state{}
 -spec get_state() -> #state{}.
 get_state() ->
     gen_event:call(error_logger, ?MODULE, {get_state}, infinity).
@@ -106,11 +111,7 @@ get_state() ->
 %%% Callback functions from gen_event
 %%%----------------------------------------------------------------------
 
-%%----------------------------------------------------------------------
-%% Func: init/1
-%% Returns: {ok, State}          |
-%%          Other
-%%----------------------------------------------------------------------
+%% @hidden
 -spec init([]) -> {ok, #state{}}.
 init([]) ->
     TermMaxSize = get_int_env(term_max_size, 10*1024),
@@ -136,12 +137,7 @@ init([]) ->
                 conslog_type = ConslogType,
                 conslog_sasl = ConslogSASL}}.
 
-%%----------------------------------------------------------------------
-%% Func: handle_event/2
-%% Returns: {ok, State}                                |
-%%          {swap_handler, Args1, State1, Mod2, Args2} |
-%%          remove_handler                              
-%%----------------------------------------------------------------------
+%% @hidden
 -spec handle_event({atom(), pid(), {pid(), string() | atom(), any()}}, #state{}) -> {ok, #state{}}.
 handle_event(Event, #state{errlog_type = ErrlogType, conslog_type = ConslogType,
                            log_fh = LogFH, term_max_size = TermMaxSize,
@@ -166,12 +162,7 @@ handle_event(Event, #state{errlog_type = ErrlogType, conslog_type = ConslogType,
     end,
     {ok, State}.
 
-%%----------------------------------------------------------------------
-%% Func: handle_call/2
-%% Returns: {ok, Reply, State}                                |
-%%          {swap_handler, Reply, Args1, State1, Mod2, Args2} |
-%%          {remove_handler, Reply}                            
-%%----------------------------------------------------------------------
+%% @hidden
 -spec handle_call(term(), #state{}) -> {ok, ok, #state{}}.
 handle_call(reopen_log_file, State) ->
     case State#state.log_fh of
@@ -192,25 +183,17 @@ handle_call(_Request, State) ->
     Reply = nosupported,
     {ok, Reply, State}.
 
-%%----------------------------------------------------------------------
-%% Func: handle_info/2
-%% Returns: {ok, State}                                |
-%%          {swap_handler, Args1, State1, Mod2, Args2} |
-%%          remove_handler                              
-%%----------------------------------------------------------------------
+%% @hidden
 -spec handle_info(term(), #state{}) -> {ok, #state{}}.
 handle_info(_Info, State) ->
     {ok, State}.
 
-%%----------------------------------------------------------------------
-%% Func: terminate/2
-%% Purpose: Shutdown the server
-%% Returns: any
-%%----------------------------------------------------------------------
+%% @hidden
 -spec terminate(term(), #state{}) -> ok.
 terminate(_Reason, _State) ->
     ok.
 
+%% @hidden
 -spec code_change(term(), #state{}, term()) -> {ok, #state{}}.
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.

@@ -279,8 +279,13 @@ format_event(Event, TermMaxSize, FmtMaxBytes) ->
 limited_fmt(Fmt, Args, TermMaxSize, FmtMaxBytes) ->
     TermSize = erts_debug:flat_size(Args),
     if TermSize > TermMaxSize ->
-            {Str, _} = trunc_io:print(Args, FmtMaxBytes),
-            ["Oversize args for format \"", Fmt, "\": ", Str];
+            ["Oversize args for format \"", Fmt, "\": \n",
+             [
+              begin
+                  {Str, _} = trunc_io:print(lists:nth(N, Args), FmtMaxBytes),
+                  ["  arg", integer_to_list(N), ": ", Str, "\n"]
+              end || N <- lists:seq(1, length(Args))
+             ]];
        true ->
             io_lib:format(Fmt, Args)
     end.

@@ -3,7 +3,7 @@
 {application, riak_err,
  [
   {description, "Custom error handler"},
-  {vsn, "0.1.0"},
+  {vsn, "1.0.1"},
   {modules, [
              riak_err_app,
              riak_err_handler,

@@ -77,32 +77,27 @@
 
 %% @doc Add a supervised handler to the OTP kernel's
 %%      <tt>error_logger</tt> event server.
-%% @spec add_sup_handler() -> term()
 -spec add_sup_handler() -> term().
 add_sup_handler() ->
     gen_event:add_sup_handler(error_logger, ?MODULE, []).
 
 %% @doc Change the internal value of <tt>term_max_size</tt>.
-%% @spec set_term_max_size(pos_integer()) -> ok
 -spec set_term_max_size(pos_integer()) -> ok.
 set_term_max_size(Num) ->
     gen_event:call(error_logger, ?MODULE, {set_term_max_size, Num}, infinity).
 
 %% @doc Change the internal value of <tt>fmt_max_bytes</tt>.
-%% @spec set_fmt_max_bytes(pos_integer()) -> ok
 -spec set_fmt_max_bytes(pos_integer()) -> ok.
 set_fmt_max_bytes(Num) ->
     gen_event:call(error_logger, ?MODULE, {set_fmt_max_bytes, Num}, infinity).
 
 %% @doc Tell our error handler to reopen the <tt>sasl_error_logger</tt> file's
 %%      file handle (e.g., to assist log file rotation schemes).
-%% @spec reopen_log_file() -> ok
 -spec reopen_log_file() -> ok.
 reopen_log_file() ->
     gen_event:call(error_logger, riak_err_handler, reopen_log_file, infinity).
 
 %% @doc Debugging: get internal state record.
-%% @spec get_state() -> #state{}
 -spec get_state() -> #state{}.
 get_state() ->
     gen_event:call(error_logger, ?MODULE, {get_state}, infinity).
@@ -256,7 +251,6 @@ format_event(Event, TermMaxSize, FmtMaxBytes) ->
 %% If the Args list's size is larger than TermMaxSize, then the
 %% formatting is done by trunc_io:print/2, where FmtMaxBytes is used
 %% to limit the formatted string's size.
-%% @spec limited_fmt(string(), list(), integer(), integer()) -> iolist()
 -spec limited_fmt(string(), list(), integer(), integer()) -> iolist().
 limited_fmt(Fmt, Args, TermMaxSize, FmtMaxBytes) ->
     TermSize = erts_debug:flat_size(Args),

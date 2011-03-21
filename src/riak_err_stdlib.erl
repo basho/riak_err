@@ -42,7 +42,6 @@
 
 %% @doc From OTP stdlib's error_logger_tty_h.erl ... These functions aren't
 %% exported.
-%% @spec write_time({utc, t_datetime1970()} | t_datetime1970(), string()) -> string()
 -spec write_time({utc, t_datetime1970()} | t_datetime1970(), string()) -> string().
 write_time({utc,{{Y,Mo,D},{H,Mi,S}}},Type) ->
     io_lib:format("~n=~s==== ~p-~s-~p::~s:~s:~s UTC ===~n",
@@ -53,7 +52,6 @@ write_time({{Y,Mo,D},{H,Mi,S}},Type) ->
 
 %% @doc From OTP stdlib's error_logger_tty_h.erl ... These functions aren't
 %% exported.
-%% @spec maybe_utc(t_datetime1970()) -> {utc, t_datetime1970()} | t_datetime1970()
 -spec maybe_utc(t_datetime1970()) -> {utc, t_datetime1970()} | t_datetime1970().
 maybe_utc(Time) ->
     UTC = case application:get_env(sasl, utc_log) of
@@ -101,7 +99,6 @@ month(12) -> "Dec".
 
 %% @doc From OTP sasl's sasl_report.erl ... These functions aren't
 %% exported.
-%% @spec is_my_error_report(atom()) -> boolean()
 -spec is_my_error_report(atom()) -> boolean().
 is_my_error_report(supervisor_report)   -> true;
 is_my_error_report(crash_report)        -> true;
@@ -109,14 +106,12 @@ is_my_error_report(_)                   -> false.
 
 %% @doc From OTP sasl's sasl_report.erl ... These functions aren't
 %% exported.
-%% @spec is_my_info_report(atom()) -> boolean()
 -spec is_my_info_report(atom()) -> boolean().
 is_my_info_report(progress)  -> true;
 is_my_info_report(_)         -> false.
 
 %% @doc From OTP sasl's sasl_report.erl ... These functions aren't
 %% exported.
-%% @spec sup_get(term(), [proplists:property()]) -> term()
 -spec sup_get(term(), [proplists:property()]) -> term().
 sup_get(Tag, Report) ->
     case lists:keysearch(Tag, 1, Report) of
@@ -127,7 +122,6 @@ sup_get(Tag, Report) ->
     end.
 
 %% @doc From OTP stdlib's proc_lib.erl ... These functions aren't exported.
-%% @spec proc_lib_format([term()], pos_integer()) -> string()
 -spec proc_lib_format([term()], pos_integer()) -> string().
 proc_lib_format([OwnReport,LinkReport], FmtMaxBytes) ->
     OwnFormat = format_report(OwnReport, FmtMaxBytes),

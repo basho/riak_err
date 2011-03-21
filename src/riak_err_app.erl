@@ -102,7 +102,6 @@
          stop/1]).
 
 %% @doc  Starts the application
-%% @spec start() -> 'ok' | {'error', term()}
 -spec start() -> 'ok' | {'error', term()}.
 start() ->
     application:start(riak_err).

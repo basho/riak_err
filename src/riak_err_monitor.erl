@@ -39,13 +39,11 @@
 %%% API
 %%%----------------------------------------------------------------------
 %% @doc Starts the monitor
-%% @spec start_link() -> {ok, pid()} | ignore | {error, term()}
 -spec start_link() -> {ok, pid()} | ignore | {error, term()}.
 start_link() ->
     gen_server:start_link({local, ?NAME}, ?MODULE, [], []).
 
 %% @doc Stops the monitor
-%% @spec stop() -> ok
 -spec stop() -> ok.
 stop() ->
     gen_event:call(?NAME, stop, infinity).

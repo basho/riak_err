@@ -31,7 +31,6 @@
 -type startlink_ret() :: {'ok', pid()} | 'ignore' | {'error', startlink_err()}.
 
 %% @doc Starts the supervisor
-%% @spec start_link() -> startlink_ret()
 -spec start_link() -> startlink_ret().
 start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).

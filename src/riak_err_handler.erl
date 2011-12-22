@@ -151,7 +151,10 @@ handle_event(Event, #state{errlog_type = ErrlogType, conslog_type = ConslogType,
     end,
     case should_log_it(ErrlogType, ErrorP, ReportStr) of
         true when LogFH /= undefined ->
-            file:write(LogFH, Formatted);
+            case file:write(LogFH, Formatted) of
+              ok -> ok;
+              {error, _Reason} -> io:format("Couldn't log: " ++ Formatted)
+            end;
         _ ->
             ok
     end,
